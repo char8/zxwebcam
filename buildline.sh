@@ -1,0 +1,1 @@
+g++ -Wall -g -std=c++11 -I../libs/spdlog/include/ -I../libs/zxing-cpp/core/src MagickSource.cpp webcam.cxx -pthread -lv4l2 -L../libs/zxing-cpp/build/ -lzxing `Magick++-config --cppflags --cxxflags --ldflags --libs` -o webcam
