@@ -28,25 +28,17 @@
 #include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 
+//using namespace zxwebcam::Webcam;
+//using namespace zxwebcam::configuration_error;
+using namespace zxwebcam;
+
 namespace spd = spdlog;
 namespace mgk = Magick;
 
-Webcam::Webcam(std::string& device): fd_{-1}, isOpen_{false}, device_{device},
-  logger_{spd::get("v4l")}, imgWidth_{800}, imgHeight_{600}, fps_{5},
-  buffer_count_{5}, buffers_{nullptr} {
-}
-
-Webcam::~Webcam() {
-  close();
-}
-
-void Webcam::close() {
-  if (isOpen_) {
-    v4l2_close(fd_);
-    fd_ = -1;
-  }
-}
-
+/* Taken from v4lgrab.c example
+ * https://chromium.googlesource.com/chromiumos/third_party/kernel/+/master/Documentation/video4linux/v4lgrab.c
+ * removed loop on EINTR as I don't think we need it here
+ */
 static int xioctl(int fd, int request, void *arg) {
   int res;
 
@@ -57,73 +49,92 @@ static int xioctl(int fd, int request, void *arg) {
   return res;
 }
 
+Webcam::Webcam(std::string& device,
+    unsigned int cap_height,
+    unsigned int cap_width,
+    unsigned int fps,
+    unsigned int buffer_count):
+  fd_{-1},
+  is_open_{false},
+  device_{device},
+  logger_{spd::get("v4l")},
+  cap_width_{cap_height},
+  cap_height_{cap_width},
+  fps_{fps},
+  buffer_count_{buffer_count},
+  buffers_{nullptr} {
+}
+
+Webcam::~Webcam() {
+  //TODO: stop stream
+  //TODO: unmap memory
+  close();
+}
+
+void Webcam::close() {
+  if (is_open_) {
+    v4l2_close(fd_);
+    fd_ = -1;
+  }
+}
+
 void Webcam::init() {
   logger_->debug("Opening V4L device: " + device_);
   fd_ = v4l2_open(device_.c_str(), O_RDWR | O_NONBLOCK, 0);
   
-  int en = errno;
   if (fd_ == -1) {
-    logger_->error("Unable to open V4L device with err={}", en);
-    exit(EXIT_FAILURE);
+    throw configuration_error("Unable to open V4L device with err={}",
+                              errno);
   }
 
-  isOpen_ = true;
+  is_open_ = true;
 
-  if (!checkCapabilities()) {
+  if (!check_capabilities()) 
     // Device doesn't support Video capture or streaming
-    logger_->error("Device is not supported.");
-    exit(EXIT_FAILURE);
-  }
+    throw configuration_error("Device is not supported.");
 
-  v4l2_format vfmt = {0};
-  
-  vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  vfmt.fmt.pix.width = imgWidth_;
-  vfmt.fmt.pix.height = imgHeight_;
-  vfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-  vfmt.fmt.pix.field = V4L2_FIELD_NONE;
+  v4l2_format vfmt          = {0};
+  vfmt.type                 = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  vfmt.fmt.pix.width        = cap_width_;
+  vfmt.fmt.pix.height       = cap_height_;
+  vfmt.fmt.pix.pixelformat  = V4L2_PIX_FMT_MJPEG;
+  vfmt.fmt.pix.field        = V4L2_FIELD_NONE;
 
-  if (-1 == xioctl(fd_, VIDIOC_S_FMT, &vfmt)) {
-    logger_->error("Unable to set device format.");
-    exit(EXIT_FAILURE);
-  }
+  if (-1 == xioctl(fd_, VIDIOC_S_FMT, &vfmt))
+    throw configuration_error("Unable to set device format.", errno);
 
-  if ((imgWidth_ != vfmt.fmt.pix.width) ||
-      (imgHeight_ != vfmt.fmt.pix.height)) {
-    imgWidth_ = vfmt.fmt.pix.width;
-    imgHeight_ = vfmt.fmt.pix.height;
+  if ((cap_width_ != vfmt.fmt.pix.width) ||
+      (cap_height_ != vfmt.fmt.pix.height)) {
+    cap_width_ = vfmt.fmt.pix.width;
+    cap_height_ = vfmt.fmt.pix.height;
     logger_->warn("Device changed image dimensions to {}x{}",
-        imgWidth_,
-        imgHeight_);
+        cap_width_,
+        cap_height_);
   }
 
   v4l2_streamparm sparm = {0};
   sparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   sparm.parm.capture.timeperframe = {1, fps_};
-  
-  if (-1 == xioctl(fd_, VIDIOC_S_PARM, &sparm)) {
-    logger_->error("Unable to set framerate.");
-    exit(EXIT_FAILURE);
-  }
+  if (-1 == xioctl(fd_, VIDIOC_S_PARM, &sparm))
+    throw configuration_error("Unable to set framerate.", errno);
 
-  initMmap();
+  init_mmap();
 }
 
-void Webcam::initMmap() {
+void Webcam::init_mmap() {
   v4l2_requestbuffers reqbuffers = {0};
   
   reqbuffers.count = buffer_count_;
   reqbuffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   reqbuffers.memory = V4L2_MEMORY_MMAP;
 
-  if (-1 == xioctl(fd_, VIDIOC_REQBUFS, &reqbuffers)) {
-    logger_->error("Unable to configure buffers. Errno: {}", errno);
-    exit(EXIT_FAILURE);
-  }
+  if (-1 == xioctl(fd_, VIDIOC_REQBUFS, &reqbuffers))
+    throw configuration_error("Unable to configure buffers. Errno: {}", errno);
+  
 
-  if (reqbuffers.count != buffer_count_) {
+  if (reqbuffers.count != buffer_count_)
     logger_->warn("Driver was only able to allocate {} buffers.", reqbuffers.count);
-  }
+
 
   buffer_count_ = reqbuffers.count;
   buffers_ = new BufferMap[buffer_count_]; //allocate memory for buffer mapping information
@@ -135,7 +146,6 @@ void Webcam::initMmap() {
     buffers_[n].length_ = 0;
   }
 
-
   for (unsigned int n = 0; n < buffer_count_; n++) {
     v4l2_buffer buf = {0};
 
@@ -145,7 +155,7 @@ void Webcam::initMmap() {
 
     if (-1 == xioctl(fd_, VIDIOC_QUERYBUF, &buf)) {
       logger_->error("Querying buffer {} failed.", n);
-      exit(EXIT_FAILURE);
+      throw configuration_error("Buffer configuration failed", errno);
     }
 
     buffers_[n].length_ = buf.length;
@@ -153,13 +163,12 @@ void Webcam::initMmap() {
         MAP_SHARED, fd_, buf.m.offset);
     
     if (MAP_FAILED == buffers_[n].start_) {
-      logger_->error("Memory mapping failed with errno: {}", errno);
-      exit(EXIT_FAILURE);
+      throw configuration_error("Memory mapping failed", errno);
     }
   }
 }
 
-void Webcam::startCapture() {
+void Webcam::start_capture() {
   v4l2_buf_type type;
 
   for (unsigned int n = 0; n < buffer_count_; n++) {
@@ -172,7 +181,7 @@ void Webcam::startCapture() {
 
     if (-1 == xioctl(fd_, VIDIOC_QBUF, &buf)) {
       logger_->error("Unable to queue buffer {}. Errno: {}.", n, errno);
-      exit(EXIT_FAILURE);
+      throw configuration_error("Buffer configuration failed", errno);
     }
   }
 
@@ -180,21 +189,19 @@ void Webcam::startCapture() {
   type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
   if (-1 == xioctl(fd_, VIDIOC_STREAMON, &type)) {
-    logger_->error("Unable to start streaming. Errno: {}.", errno);
-    exit(EXIT_FAILURE);
+    throw configuration_error("Unable to start streaming", errno);
   }
 }
 
-void Webcam::endCapture() {
+void Webcam::end_capture() {
   v4l2_buf_type type;
 
   if (-1 == xioctl(fd_, VIDIOC_STREAMOFF, &type)) {
-    logger_->error("Unable to stop streaming. Errno: {}.");
-    exit(EXIT_FAILURE);
+    throw configuration_error("Unable to stop streaming", errno); 
   }
 }
 
-int Webcam::grabFrame(mgk::Blob& dest_blob) {
+int Webcam::grab_frame(mgk::Blob& dest_blob) {
   // Refactor?: return a SharedPtr to a CamFrame obj that is composed
   // of a blob and timestamp. Nullptr return on EAGAIN.
   v4l2_buffer buf = {0};
@@ -225,15 +232,15 @@ int Webcam::fd() const {
   return fd_;
 }
 
-unsigned int Webcam::imgHeight() const {
-  return imgHeight_;
+unsigned int Webcam::cap_height() const {
+  return cap_height_;
 }
 
-unsigned int Webcam::imgWidth() const {
-  return imgWidth_;
+unsigned int Webcam::cap_width() const {
+  return cap_width_;
 }
 
-bool Webcam::checkCapabilities() {
+bool Webcam::check_capabilities() {
   v4l2_capability cap = {0};
 
   if (-1 == xioctl(fd_, VIDIOC_QUERYCAP, &cap)) {
@@ -265,98 +272,4 @@ bool Webcam::checkCapabilities() {
   }
 
   return true;
-}
-
-void DecodeBar(mgk::Image &img) {
-  using namespace zxing;
-
-  auto console = spd::get("console");
-  Ref<LuminanceSource> source = MagickSource::create(img);
-  std::vector<Ref<Result>> results;
-
-  Ref<Binarizer> binarizer;
-  binarizer = new HybridBinarizer(source);
-  
-  DecodeHints hints(DecodeHints::DEFAULT_HINT);
-
-  Ref<BinaryBitmap> binary(new BinaryBitmap(binarizer));
-
-  Ref<Reader> reader(new MultiFormatReader);
-
-  try {
-    results = std::vector<Ref<Result>>(1, reader->decode(binary, hints));
-  } catch (const ReaderException& e) {
-    console->info("Reader Exception: {}", std::string(e.what()));
-  }
-  
-
-  console->info("Got results vector with length: {}", results.size());
-  
-  img.fillColor("green");
-  img.strokeColor("green");
-  img.strokeWidth(1);
-
-  for (unsigned int i = 0; i < results.size(); i++) {
-    for (int j = 0; j < results[i]->getResultPoints()->size(); j++) {
-      int x = results[i]->getResultPoints()[j]->getX();
-      int y = results[i]->getResultPoints()[j]->getY();
-      img.draw(mgk::DrawableCircle(x, y, x+10, y));
-    }
-
-    console->info("Text: {}", results[i]->getText()->getText());
-  }
-}
-
-int main(int argc, char** argv) {
-  mgk::InitializeMagick(*argv);
-  auto console = spdlog::stdout_color_mt("console");
-  console->info("Welcome to stdlog!");
-  auto v4l = spdlog::stdout_color_mt("v4l");
-  std::string d = "/dev/video0";
-  Webcam v(d);
-  v.init();
-  v.startCapture();
-
-  mgk::Blob blob;
-  
-  int frameCount = 0;
-
-  while (frameCount < 60) {
-    fd_set fds;
-    FD_ZERO(&fds);
-    int webcam_fd = v.fd();
-    FD_SET(webcam_fd, &fds);
-
-    timeval tout = {1, 0};
-    
-    int ret = select(webcam_fd+1, &fds, NULL, NULL, &tout);
-
-    switch(ret) {
-      case -1:
-        console->error("select() call error. Errno: {}", errno);
-        exit(EXIT_FAILURE);
-      case 0:
-        console->warn("Timeout on select() call.");
-        continue; // next iteration
-    }
-  
-    ret = v.grabFrame(blob);
-    
-    if (!ret) continue; // frame was not ready
-    
-    // blob contains a frame
-    frameCount++;
-    console->info("Frame: {}", frameCount);
-
-    mgk::Image img(blob, mgk::Geometry(v.imgWidth(), v.imgHeight()));
-
-    std::ostringstream ss;
-    ss << "Frame_" << frameCount << ".jpg";
-    DecodeBar(img);
-    img.write(ss.str());
-  }
-
-  v.endCapture();
-  v.close();
-  return 0;
 }
