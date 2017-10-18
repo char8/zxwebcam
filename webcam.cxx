@@ -1,32 +1,12 @@
 #include "webcam.h"
 
-#include <sys/select.h>
-#include <sys/time.h>
-
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <error.h>
 #include <fcntl.h>
-#include <iostream>
-#include <sstream>
 
 #include <linux/videodev2.h>
 #include <libv4l2.h>
-
-#include <fstream>
-
-#include "MagickSource.h"
-#include <vector>
-
-#include <zxing/Binarizer.h>
-#include <zxing/common/HybridBinarizer.h>
-#include <zxing/ReaderException.h>
-#include <zxing/Result.h>
-#include <zxing/Exception.h>
-#include <zxing/common/IllegalArgumentException.h>
-#include <zxing/BinaryBitmap.h>
-#include <zxing/DecodeHints.h>
-#include <zxing/MultiFormatReader.h>
 
 //using namespace zxwebcam::Webcam;
 //using namespace zxwebcam::configuration_error;
@@ -39,7 +19,7 @@ namespace mgk = Magick;
  * https://chromium.googlesource.com/chromiumos/third_party/kernel/+/master/Documentation/video4linux/v4lgrab.c
  * removed loop on EINTR as I don't think we need it here
  */
-static int xioctl(int fd, int request, void *arg) {
+static int xioctl(int fd, unsigned long request, void *arg) {
   int res;
 
   do {
@@ -93,7 +73,7 @@ void Webcam::init() {
     // Device doesn't support Video capture or streaming
     throw configuration_error("Device is not supported.");
 
-  v4l2_format vfmt          = {0};
+  v4l2_format vfmt          = {};
   vfmt.type                 = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   vfmt.fmt.pix.width        = cap_width_;
   vfmt.fmt.pix.height       = cap_height_;
@@ -112,7 +92,7 @@ void Webcam::init() {
         cap_height_);
   }
 
-  v4l2_streamparm sparm = {0};
+  v4l2_streamparm sparm = {};
   sparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   sparm.parm.capture.timeperframe = {1, fps_};
   if (-1 == xioctl(fd_, VIDIOC_S_PARM, &sparm))
@@ -122,7 +102,7 @@ void Webcam::init() {
 }
 
 void Webcam::init_mmap() {
-  v4l2_requestbuffers reqbuffers = {0};
+  v4l2_requestbuffers reqbuffers = {};
   
   reqbuffers.count = buffer_count_;
   reqbuffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -147,7 +127,7 @@ void Webcam::init_mmap() {
   }
 
   for (unsigned int n = 0; n < buffer_count_; n++) {
-    v4l2_buffer buf = {0};
+    v4l2_buffer buf = {};
 
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
@@ -173,7 +153,7 @@ void Webcam::start_capture() {
 
   for (unsigned int n = 0; n < buffer_count_; n++) {
     // Queue buffers
-    v4l2_buffer buf = {0};
+    v4l2_buffer buf = {};
 
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
@@ -204,7 +184,7 @@ void Webcam::end_capture() {
 int Webcam::grab_frame(mgk::Blob& dest_blob) {
   // Refactor?: return a SharedPtr to a CamFrame obj that is composed
   // of a blob and timestamp. Nullptr return on EAGAIN.
-  v4l2_buffer buf = {0};
+  v4l2_buffer buf = {};
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   buf.memory = V4L2_MEMORY_MMAP;
 
@@ -241,7 +221,7 @@ unsigned int Webcam::cap_width() const {
 }
 
 bool Webcam::check_capabilities() {
-  v4l2_capability cap = {0};
+  v4l2_capability cap = {};
 
   if (-1 == xioctl(fd_, VIDIOC_QUERYCAP, &cap)) {
     logger_->error("Unable to query v4l device.");
@@ -258,7 +238,7 @@ bool Webcam::check_capabilities() {
     return false;
   }
 
-  v4l2_format fmt = {0};
+  v4l2_format fmt = {};
   fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
   if (-1 == xioctl(fd_, VIDIOC_G_FMT, &fmt)) {
