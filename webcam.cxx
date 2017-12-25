@@ -1,5 +1,9 @@
 #include "webcam.h"
 
+#include <system_error>
+
+
+#include <system_error>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <error.h>
@@ -13,14 +17,13 @@
 using namespace zxwebcam;
 
 namespace spd = spdlog;
-namespace mgk = Magick;
 
 /* Taken from v4lgrab.c example
  * https://chromium.googlesource.com/chromiumos/third_party/kernel/+/master/Documentation/video4linux/v4lgrab.c
  * removed loop on EINTR as I don't think we need it here
  */
 static int xioctl(int fd, unsigned long request, void *arg) {
-  int res;
+  int res = -1;
 
   do {
     res = v4l2_ioctl(fd, request, arg);
@@ -35,24 +38,41 @@ Webcam::Webcam(std::string& device,
     unsigned int fps,
     unsigned int buffer_count):
   fd_{-1},
-  is_open_{false},
+  is_streaming_{false},
   device_{device},
   logger_{spd::get("v4l")},
-  cap_width_{cap_height},
-  cap_height_{cap_width},
+  cap_width_{cap_width},
+  cap_height_{cap_height},
   fps_{fps},
   buffer_count_{buffer_count},
   buffers_{nullptr} {
 }
 
 Webcam::~Webcam() {
-  //TODO: stop stream
-  //TODO: unmap memory
+  // destructor can throw exceptions which is not ideal
+  // close shouldn't have anything to do when this is called...
   close();
 }
 
 void Webcam::close() {
-  if (is_open_) {
+  if (fd_ != -1) {
+
+    if (is_streaming_)
+      end_capture();
+
+    for (unsigned int n = 0; n < buffer_count_; n++) {
+      int r = munmap(buffers_[n].start_, buffers_[n].length_);
+      if (-1 == r) {
+        throw configuration_error("Unable to unmap buffers from V4L2", errno);
+      }
+
+      buffers_[n].start_ = nullptr;
+      buffers_[n].length_ = 0;
+    }
+
+    delete[] buffers_;
+    buffers_ = nullptr;
+
     v4l2_close(fd_);
     fd_ = -1;
   }
@@ -60,14 +80,13 @@ void Webcam::close() {
 
 void Webcam::init() {
   logger_->debug("Opening V4L device: " + device_);
-  fd_ = v4l2_open(device_.c_str(), O_RDWR | O_NONBLOCK, 0);
   
+  fd_ = v4l2_open(device_.c_str(), O_RDWR | O_NONBLOCK, 0);
+
   if (fd_ == -1) {
-    throw configuration_error("Unable to open V4L device with err={}",
+    throw configuration_error("Unable to open V4L device with err",
                               errno);
   }
-
-  is_open_ = true;
 
   if (!check_capabilities()) 
     // Device doesn't support Video capture or streaming
@@ -102,6 +121,10 @@ void Webcam::init() {
 }
 
 void Webcam::init_mmap() {
+
+  if (buffers_ != nullptr)
+    throw configuration_error("Should not re-init mmap while one exists");
+
   v4l2_requestbuffers reqbuffers = {};
   
   reqbuffers.count = buffer_count_;
@@ -171,6 +194,8 @@ void Webcam::start_capture() {
   if (-1 == xioctl(fd_, VIDIOC_STREAMON, &type)) {
     throw configuration_error("Unable to start streaming", errno);
   }
+
+  is_streaming_ = true;
 }
 
 void Webcam::end_capture() {
@@ -179,9 +204,11 @@ void Webcam::end_capture() {
   if (-1 == xioctl(fd_, VIDIOC_STREAMOFF, &type)) {
     throw configuration_error("Unable to stop streaming", errno); 
   }
+
+  is_streaming_ = false;
 }
 
-int Webcam::grab_frame(mgk::Blob& dest_blob) {
+std::shared_ptr<Frame> Webcam::grab_frame() {
   // Refactor?: return a SharedPtr to a CamFrame obj that is composed
   // of a blob and timestamp. Nullptr return on EAGAIN.
   v4l2_buffer buf = {};
@@ -191,21 +218,25 @@ int Webcam::grab_frame(mgk::Blob& dest_blob) {
   if (-1 == xioctl(fd_, VIDIOC_DQBUF, &buf)) {
      switch(errno) {
       case EAGAIN:
-        return 0; // Nonblocking read
+        return nullptr; // Nonblocking read
       default:
-        logger_->error("Unable to dequeue buffer from device. Errno: {}.", errno);
-        exit(EXIT_FAILURE);
+        throw std::system_error(errno,
+                std::system_category(),
+                "Unable to dequeue buffer from device.");
      }
   }
-
-  dest_blob.update(buffers_[buf.index].start_, buffers_[buf.index].length_);
-
+  
+  auto f = std::make_shared<Frame>((char*)buffers_[buf.index].start_,
+                                   FrameEncoding::JPEG,
+                                   buf.bytesused);
+    
   // enqueue the frame again
   if (-1 == xioctl(fd_, VIDIOC_QBUF, &buf)) {
-    logger_->error("Unable to requeue frame {}. Errno: {}.", buf.index, errno);
-    exit(EXIT_FAILURE);
+    throw std::system_error(errno,
+             std::system_category(),
+             "Unable to requeue frame.");
   }
-  return 1;
+  return f;
 }
 
 int Webcam::fd() const {

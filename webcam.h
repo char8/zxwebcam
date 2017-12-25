@@ -1,9 +1,11 @@
 #ifndef WEBCAM_H__
 #define WEBCAM_H__
 
+#include "frame.h"
+
 #include <spdlog/spdlog.h>
-#include <Magick++.h>
 #include <string>
+#include <memory>
 #include <stdexcept>
 
 namespace zxwebcam {
@@ -11,12 +13,12 @@ namespace zxwebcam {
 /*! \brief A exception thrown when the device cannot be configured */
 class configuration_error : public std::runtime_error {
   private:
-    int err_no_;
+    int errno_;
   public:
-    configuration_error(const std::string& what_arg, int err_no = 0):
+    configuration_error(const std::string& what_arg, int eno = 0):
       std::runtime_error(what_arg),
-      err_no_(err_no) {};
-    int err_no() const { return err_no_; };
+      errno_(eno) {};
+    int get_errno() const { return errno_; };
 };
   
 /*! \brief Struct to hold memory mappings for allocated V4L buffers
@@ -36,7 +38,7 @@ struct BufferMap {
 class Webcam {
   private:
     int fd_; /*!< filedesc of V4L block device */
-    bool is_open_; /*!< track state of fd */
+    bool is_streaming_; /*!< track state of stream */
 
     std::string device_; /*!< path to device node in /dev/ */
     std::shared_ptr<spdlog::logger> logger_; /*!< ref to spdlogger instance*/
@@ -60,9 +62,9 @@ class Webcam {
      *  during device init. Warnings should be generated in such a case.
      */
     Webcam(std::string& device, /*!< [in] path to V4L device node */
-           unsigned int cap_weight = 600, /*!< [in] request height for V4L images.
+           unsigned int cap_height = 1080, /*!< [in] request height for V4L images.
                                             Value might be overriden by device. */
-           unsigned int cap_width = 800, /*!< [in] request width for V4L images.
+           unsigned int cap_width = 1920, /*!< [in] request width for V4L images.
                                             Value might be overriden by device. */
            unsigned int fps = 5, /*!< [in] request fps for capture. */
            unsigned int bufferCount = 5/*! [in] num of capture buffers to request. */
@@ -91,7 +93,7 @@ class Webcam {
 
     void start_capture();
     void end_capture();
-    int grab_frame(Magick::Blob& dest_blob);
+    std::shared_ptr<Frame> grab_frame();
 
     int fd() const;
     unsigned int cap_width() const;
