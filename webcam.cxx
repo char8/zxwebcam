@@ -43,6 +43,9 @@ Webcam::Webcam(std::string& device,
   cap_height_{cap_height},
   fps_{fps},
   buffer_count_{buffer_count},
+  // this is a supported format from libv4l2 which should convert if
+  // not natively supported by the camera
+  pixel_format_{V4L2_PIX_FMT_RGB24},
   buffers_{nullptr} {
 }
 
@@ -54,11 +57,13 @@ Webcam::~Webcam() {
 
 void Webcam::close() {
   if (fd_ != -1) {
+    logger_->debug("Closing {}", device_);
 
     if (is_streaming_)
       end_capture();
 
     for (unsigned int n = 0; n < buffer_count_; n++) {
+      logger_->debug("Unmapping buffer {}/{}", n+1, buffer_count_);
       int r = munmap(buffers_[n].start_, buffers_[n].length_);
       if (-1 == r) {
         throw std::system_error(errno, std::generic_category(), "Unable to unmap buffers from V4L2");
@@ -93,7 +98,7 @@ void Webcam::init() {
   vfmt.type                 = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   vfmt.fmt.pix.width        = cap_width_;
   vfmt.fmt.pix.height       = cap_height_;
-  vfmt.fmt.pix.pixelformat  = V4L2_PIX_FMT_MJPEG;
+  vfmt.fmt.pix.pixelformat  = pixel_format_;
   vfmt.fmt.pix.field        = V4L2_FIELD_NONE;
 
   if (-1 == xioctl(fd_, VIDIOC_S_FMT, &vfmt))
@@ -162,7 +167,7 @@ void Webcam::init_mmap() {
 
     buffers_[n].length_ = buf.length;
     buffers_[n].start_ = v4l2_mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
-        MAP_SHARED, fd_, buf.m.offset);
+                                   MAP_SHARED, fd_, buf.m.offset);
     
     if (MAP_FAILED == buffers_[n].start_) {
       throw std::system_error(errno, std::generic_category(), "Memory mapping failed");
@@ -229,9 +234,11 @@ std::shared_ptr<Frame> Webcam::grab_frame() {
      }
   }
   
-  auto f = std::make_shared<Frame>((char*)buffers_[buf.index].start_,
-                                   FrameEncoding::JPEG,
-                                   buf.bytesused);
+  auto f = std::make_shared<Frame>((unsigned char*)(buffers_[buf.index].start_),
+                                   buf.bytesused,
+                                   cap_height_,
+                                   cap_width_,
+                                   FrameFormat::RGB24);
     
   // enqueue the frame again
   if (-1 == xioctl(fd_, VIDIOC_QBUF, &buf)) {
@@ -280,8 +287,8 @@ bool Webcam::check_capabilities() {
     return false;
   }
 
-  if (!(fmt.fmt.pix.pixelformat & V4L2_PIX_FMT_MJPEG)) {
-    logger_->error("Does not support MJPEG output.");
+  if (!(fmt.fmt.pix.pixelformat & pixel_format_)) {
+    logger_->error("Does not support selected output {}.", pixel_format_);
     return false;
   }
 

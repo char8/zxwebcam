@@ -15,6 +15,7 @@
 
 void webcam_thread(std::string device, ThreadsafeQueue<FramePtr>& queue,
                    std::atomic_bool& exit_flag) {
+
   auto logger = spdlog::get("console");
   
   zxwebcam::Webcam v(device);
@@ -61,15 +62,17 @@ void webcam_thread(std::string device, ThreadsafeQueue<FramePtr>& queue,
     }
 
     FramePtr f = v.grab_frame();
-
+  
     if (f == nullptr)
       continue;
     
-    queue.push(f);
-    logger->info("Frame captured");
+    //logger->debug("Frame captured");
 
+    //TODO: put the hardcoded magic num somewhere sensible
     if (queue.size() > 10) {
-      break;
+      logger->warn("Frame queue full, discarding frame.");
+    } else {
+      queue.push(f);
     }
   }
   

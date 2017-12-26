@@ -10,17 +10,7 @@
 
 namespace zxwebcam {
 
-/*! \brief A exception thrown when the device cannot be configured */
-class configuration_error : public std::runtime_error {
-  private:
-    int errno_;
-  public:
-    configuration_error(const std::string& what_arg, int eno = 0):
-      std::runtime_error(what_arg),
-      errno_(eno) {};
-    int get_errno() const { return errno_; };
-};
-  
+ 
 /*! \brief Struct to hold memory mappings for allocated V4L buffers
  * (in kernel memory).
  */
@@ -47,6 +37,7 @@ class Webcam {
     unsigned int cap_height_;  /*!< configured height for captured frames */
     unsigned int fps_; /*!< capture frames per second */
     unsigned int buffer_count_; /*!< num of video buffers allocated by V4L */
+    unsigned int pixel_format_; /*!< pixelformat for capture */
     BufferMap* buffers_; /*!< memory mappings of V4L video buffers */
 
     bool check_capabilities(); /*!< check that the device fulfills min reqs */
@@ -62,12 +53,12 @@ class Webcam {
      *  during device init. Warnings should be generated in such a case.
      */
     Webcam(std::string& device, /*!< [in] path to V4L device node */
-           unsigned int cap_height = 1080, /*!< [in] request height for V4L images.
+           unsigned int cap_height = 600, /*!< [in] request height for V4L images.
                                             Value might be overriden by device. */
-           unsigned int cap_width = 1920, /*!< [in] request width for V4L images.
+           unsigned int cap_width = 800, /*!< [in] request width for V4L images.
                                             Value might be overriden by device. */
            unsigned int fps = 5, /*!< [in] request fps for capture. */
-           unsigned int bufferCount = 5/*! [in] num of capture buffers to request. */
+           unsigned int buffer_count = 5/*! [in] num of capture buffers to request. */
         );
 
     //! Will deinit V4L if the device is still open

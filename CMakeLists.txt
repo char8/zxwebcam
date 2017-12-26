@@ -14,13 +14,18 @@ include_directories(${CIMG_INCLUDE_DIRS})
 
 FIND_PACKAGE(Threads)
 
-SET (SRCS decode.cxx webcam.cxx webcam_thread.cxx)
+SET (SRCS decode.cxx webcam.cxx webcam_thread.cxx frame_source.cxx decode.cxx)
 SET (LIBS ${LIBS} zxing ${LibV4l2_LIBRARIES} ${CIMG_EXT_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -ggdb -DSPDLOG_DEBUG_ON")
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CIMG_CFLAGS}")
 
+find_package(X11 REQUIRED)
+
+include_directories(${X11_INCLUDE_DIR})
+link_directories(${X11_LIBRARIES})
+
 add_executable(zxwebcam main.cxx ${SRCS})
-target_link_libraries(zxwebcam ${LIBS})
+target_link_libraries(zxwebcam ${LIBS} ${X11_LIBRARIES})
 add_dependencies(zxwebcam spdlog zxing-cpp)
 

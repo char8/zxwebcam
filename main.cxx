@@ -1,5 +1,6 @@
 #include "webcam.h"
 #include "webcam_thread.h"
+#include "decode_thread.h"
 #include "frame_queue.h"
 #include "frame.h"
 
@@ -19,7 +20,7 @@ int main(int argc, char** argv) {
   auto console = spdlog::stdout_color_mt("console");
   console->info("Welcome to stdlog!");
   console->set_level(spdlog::level::debug);
-  std::string d = "/dev/video1";
+  std::string d = "/dev/video0";
   
   ThreadsafeQueue<FramePtr> queue;
 
@@ -34,9 +35,11 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  std::thread t(webcam_thread, d, std::ref(queue), std::ref(exit_flag)); 
+  std::thread wt(webcam_thread, d, std::ref(queue), std::ref(exit_flag)); 
+  std::thread dt(decode_thread, std::ref(queue), std::ref(exit_flag));
 
-  t.join();
+  wt.join();
+  dt.join();
 }
 
 void handle_signals(int signum) {

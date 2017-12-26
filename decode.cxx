@@ -1,4 +1,97 @@
+#include "frame.h"
+#include "frame_queue.h"
+#include "frame_source.h"
 
+#include <zxing/Binarizer.h>
+#include <zxing/common/HybridBinarizer.h>
+#include <zxing/ReaderException.h>
+#include <zxing/Result.h>
+#include <zxing/Exception.h>
+#include <zxing/common/IllegalArgumentException.h>
+#include <zxing/BinaryBitmap.h>
+#include <zxing/DecodeHints.h>
+#include <zxing/MultiFormatReader.h>
+
+#include <spdlog/spdlog.h>
+
+#include <atomic>
+#include <vector>
+
+#include <cstdio>
+#include <jpeglib.h>
+#include <jerror.h>
+
+#define cimg_plugin "plugins/jpeg_buffer.h"
+#include <CImg.h>
+
+using namespace cimg_library;
+
+void decode_thread(ThreadsafeQueue<FramePtr>& queue,
+                   std::atomic_bool& exit_flag) {
+  
+  CImg<unsigned char> temp(640, 480, 1, 3, 0);
+
+  CImgDisplay main_disp(temp, "your barcode sir");
+  CImgDisplay sec_disp(temp, "your binary sir");
+  
+  using namespace zxing;
+  auto logger = spdlog::get("console");
+  
+  while(true) {
+    FramePtr p = queue.wait_and_pop();
+    
+    p->convert_to_greyscale();
+    // break loop if queue poisoned or exit_flag set
+    if ((p == nullptr) || (exit_flag))
+      break;
+
+    /*
+    unsigned int dim = p->rows()*p->cols();
+    unsigned char buf2[3*dim];
+    for(unsigned int i = 0, j = 0; i < p->buflen(); i += 3, j++) {
+      buf2[j] = p->buf()[i];
+      buf2[dim+j] = p->buf()[i+1];
+      buf2[dim*2+j] = p->buf()[i+2];
+    }
+    */
+
+    CImg<unsigned char> img(p->buf(), p->cols(), p->rows(), 1, 1);
+    img.display(main_disp);
+    
+    std::vector<Ref<Result>> results;
+    auto source = FrameSource::create(p);
+
+
+    Ref<Binarizer> binarizer;
+    binarizer = new HybridBinarizer(source);
+
+    DecodeHints hints(DecodeHints::DEFAULT_HINT);
+    hints.setTryHarder(false);
+    Ref<BinaryBitmap> binary(new BinaryBitmap(binarizer));
+    
+    for(int r = 0; r < p->rows(); r++) {
+      for(int c = 0; c < p->cols(); c++) {
+        img.atXYZ(c, r, 0, 0) = binary->getBlackMatrix()->get(c, r);
+      }
+    }
+
+    img.display(sec_disp);
+    Ref<Reader> reader(new MultiFormatReader);
+
+    try {
+      results = std::vector<Ref<Result>>(1, reader->decode(binary, hints));
+    } catch (const ReaderException& e) {
+      logger->debug("Reader Exception: {}", e.what());
+    } catch (const IllegalArgumentException& e) {
+    }
+    
+    logger->info("Got: {}", results.size());
+    for (auto it = results.begin(); it != results.end(); ++it) {
+      logger->info("Text: {}", (*it)->getText()->getText());
+    }
+  }
+
+}
 
 // void DecodeBar(mgk::Image &img) {
 //   using namespace zxing;
