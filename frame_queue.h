@@ -8,17 +8,37 @@
 #include <condition_variable>
 
 /* Thread-safe queue of frames for zxing to process */
-class FrameQueue {
-  public:
-    FrameQueue();
-    virtual ~FrameQueue();
 
-    void push(FramePtr p);
-    FramePtr wait_and_pop();
-    int size() const;
+template<typename T>
+class ThreadsafeQueue {
+  public:
+    ThreadsafeQueue() {};
+    virtual ~ThreadsafeQueue() {};
+
+    void push(T p) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      data_.push(p);
+      cond_.notify_one();
+    };
+
+    FramePtr wait_and_pop() {
+      std::unique_lock<std::mutex> lock(mutex_);
+      while(data_.empty()) {
+        cond_.wait(lock);
+      }
+
+      T p = data_.front();
+      data_.pop();
+      return p;
+    };
+
+    int size() const {
+      std::lock_guard<std::mutex> lock(mutex_);
+      return data_.size();
+    };
   protected:
     mutable std::mutex mutex_;
-    std::queue<FramePtr> data_;
+    std::queue<T> data_;
     std::condition_variable cond_;
 };
 
