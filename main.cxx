@@ -1,55 +1,45 @@
 #include "webcam.h"
+#include "webcam_thread.h"
+#include "frame_queue.h"
+#include "frame.h"
 
-#include <sstream>
+#include <atomic>
+#include <thread>
+#include <signal.h>
+
+#include <iostream>
 #include <spdlog/spdlog.h>
+
+// global flag to exit all threads - set by sighandle
+std::atomic_bool exit_flag;
+
+void handle_signals(int signum);
 
 int main(int argc, char** argv) {
   auto console = spdlog::stdout_color_mt("console");
   console->info("Welcome to stdlog!");
-  auto v4l = spdlog::stdout_color_mt("v4l");
+  console->set_level(spdlog::level::debug);
   std::string d = "/dev/video1";
-  zxwebcam::Webcam v(d);
-  v.init();
-  v.start_capture();
-
   
-  int frameCount = 0;
+  ThreadsafeQueue<FramePtr> queue;
 
-  while (frameCount < 60) {
-    fd_set fds;
-    FD_ZERO(&fds);
-    int webcam_fd = v.fd();
-    FD_SET(webcam_fd, &fds);
+  exit_flag = false;
 
-    timeval tout = {1, 0};
-    
-    int ret = select(webcam_fd+1, &fds, NULL, NULL, &tout);
+  struct sigaction sa = {};
+  sa.sa_handler = handle_signals;
 
-    switch(ret) {
-      case -1:
-        console->error("select() call error. Errno: {}", errno);
-        exit(EXIT_FAILURE);
-      case 0:
-        console->warn("Timeout on select() call.");
-        continue; // next iteration
-    }
-  
-    auto sp = v.grab_frame();
-    
-    if (sp == nullptr) continue; // frame was not ready
-    
-    // blob contains a frame
-    frameCount++;
-    console->info("Frame: {}", frameCount);
-
-    std::ostringstream ss;
-    ss << "Frame_" << frameCount << ".jpg";
-    //DecodeBar(img);
-    //img.display();
-    //img.write(ss.str());
+  if (( sigaction(SIGTERM, &sa, NULL) < 0 ) ||
+      ( sigaction(SIGINT , &sa, NULL) < 0 )) {
+    console->error("Could not insert signal handlers <{}>", errno);
+    return -1;
   }
 
-  v.end_capture();
-  v.close();
-  return 0;
+  std::thread t(webcam_thread, d, std::ref(queue), std::ref(exit_flag)); 
+
+  t.join();
+}
+
+void handle_signals(int signum) {
+  std::cerr << "SIGNAL SIGTERM/SIGINT: EXITING" << std::endl;
+  exit_flag = true;
 }

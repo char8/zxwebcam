@@ -1,9 +1,7 @@
 #include "webcam.h"
 
 #include <system_error>
-
-
-#include <system_error>
+#include <stdexcept>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <error.h>
@@ -40,7 +38,7 @@ Webcam::Webcam(std::string& device,
   fd_{-1},
   is_streaming_{false},
   device_{device},
-  logger_{spd::get("v4l")},
+  logger_{spd::get("console")},
   cap_width_{cap_width},
   cap_height_{cap_height},
   fps_{fps},
@@ -63,7 +61,7 @@ void Webcam::close() {
     for (unsigned int n = 0; n < buffer_count_; n++) {
       int r = munmap(buffers_[n].start_, buffers_[n].length_);
       if (-1 == r) {
-        throw configuration_error("Unable to unmap buffers from V4L2", errno);
+        throw std::system_error(errno, std::generic_category(), "Unable to unmap buffers from V4L2");
       }
 
       buffers_[n].start_ = nullptr;
@@ -84,13 +82,12 @@ void Webcam::init() {
   fd_ = v4l2_open(device_.c_str(), O_RDWR | O_NONBLOCK, 0);
 
   if (fd_ == -1) {
-    throw configuration_error("Unable to open V4L device with err",
-                              errno);
+    throw std::system_error(errno, std::generic_category(), "Unable to open V4L device with err");
   }
 
   if (!check_capabilities()) 
     // Device doesn't support Video capture or streaming
-    throw configuration_error("Device is not supported.");
+    throw std::runtime_error("Device is not supported.");
 
   v4l2_format vfmt          = {};
   vfmt.type                 = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -100,7 +97,7 @@ void Webcam::init() {
   vfmt.fmt.pix.field        = V4L2_FIELD_NONE;
 
   if (-1 == xioctl(fd_, VIDIOC_S_FMT, &vfmt))
-    throw configuration_error("Unable to set device format.", errno);
+    throw std::system_error(errno, std::generic_category(), "Unable to set device format.");
 
   if ((cap_width_ != vfmt.fmt.pix.width) ||
       (cap_height_ != vfmt.fmt.pix.height)) {
@@ -115,15 +112,17 @@ void Webcam::init() {
   sparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   sparm.parm.capture.timeperframe = {1, fps_};
   if (-1 == xioctl(fd_, VIDIOC_S_PARM, &sparm))
-    throw configuration_error("Unable to set framerate.", errno);
+    throw std::system_error(errno, std::generic_category(), "Unable to set framerate.");
 
   init_mmap();
+
+  logger_->debug("Initialised {}", device_);
 }
 
 void Webcam::init_mmap() {
 
   if (buffers_ != nullptr)
-    throw configuration_error("Should not re-init mmap while one exists");
+    throw std::runtime_error("Should not re-init mmap while one exists");
 
   v4l2_requestbuffers reqbuffers = {};
   
@@ -132,7 +131,7 @@ void Webcam::init_mmap() {
   reqbuffers.memory = V4L2_MEMORY_MMAP;
 
   if (-1 == xioctl(fd_, VIDIOC_REQBUFS, &reqbuffers))
-    throw configuration_error("Unable to configure buffers. Errno: {}", errno);
+    throw std::system_error(errno, std::generic_category(), "Unable to configure buffers. Errno: {}");
   
 
   if (reqbuffers.count != buffer_count_)
@@ -158,7 +157,7 @@ void Webcam::init_mmap() {
 
     if (-1 == xioctl(fd_, VIDIOC_QUERYBUF, &buf)) {
       logger_->error("Querying buffer {} failed.", n);
-      throw configuration_error("Buffer configuration failed", errno);
+      throw std::system_error(errno, std::generic_category(), "Buffer configuration failed");
     }
 
     buffers_[n].length_ = buf.length;
@@ -166,7 +165,7 @@ void Webcam::init_mmap() {
         MAP_SHARED, fd_, buf.m.offset);
     
     if (MAP_FAILED == buffers_[n].start_) {
-      throw configuration_error("Memory mapping failed", errno);
+      throw std::system_error(errno, std::generic_category(), "Memory mapping failed");
     }
   }
 }
@@ -184,7 +183,7 @@ void Webcam::start_capture() {
 
     if (-1 == xioctl(fd_, VIDIOC_QBUF, &buf)) {
       logger_->error("Unable to queue buffer {}. Errno: {}.", n, errno);
-      throw configuration_error("Buffer configuration failed", errno);
+      throw std::system_error(errno, std::generic_category(), "Buffer configuration failed");
     }
   }
 
@@ -192,20 +191,24 @@ void Webcam::start_capture() {
   type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
   if (-1 == xioctl(fd_, VIDIOC_STREAMON, &type)) {
-    throw configuration_error("Unable to start streaming", errno);
+    throw std::system_error(errno, std::generic_category(), "Unable to start streaming");
   }
 
   is_streaming_ = true;
+  
+  logger_->debug("Starting capture on {}", device_);
 }
 
 void Webcam::end_capture() {
   v4l2_buf_type type;
 
   if (-1 == xioctl(fd_, VIDIOC_STREAMOFF, &type)) {
-    throw configuration_error("Unable to stop streaming", errno); 
+    throw std::system_error(errno, std::generic_category(), "Unable to stop streaming"); 
   }
 
   is_streaming_ = false;
+
+  logger_->debug("Ending capture on {}", device_);
 }
 
 std::shared_ptr<Frame> Webcam::grab_frame() {
