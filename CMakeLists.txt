@@ -14,7 +14,7 @@ include_directories(${CIMG_INCLUDE_DIRS})
 
 FIND_PACKAGE(Threads)
 
-SET (SRCS decode.cxx webcam.cxx webcam_thread.cxx frame_source.cxx decode.cxx)
+SET (SRCS decode.cxx webcam.cxx webcam_thread.cxx reader.cxx)
 SET (LIBS ${LIBS} zxing ${LibV4l2_LIBRARIES} ${CIMG_EXT_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -ggdb -DSPDLOG_DEBUG_ON")
