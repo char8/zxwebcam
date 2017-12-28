@@ -1,0 +1,9 @@
+[submodule "3rdparty/zxing-cpp"]
+	path = 3rdparty/zxing-cpp
+	url = https://github.com/nu-book/zxing-cpp.git
+[submodule "3rdparty/spdlog"]
+	path = 3rdparty/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "3rdparty/cpr"]
+	path = 3rdparty/cpr
+	url = https://github.com/whoshuu/cpr.git
