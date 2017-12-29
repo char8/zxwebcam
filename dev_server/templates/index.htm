@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dev zxwebcam</title>
+<link rel="stylesheet" href="simple.css">
+</head>
+<body>
+  <div>
+    <h2>Preview</h2>
+    <img id="preview"/>
+  </div>
+  <div>
+    <h2>Last Scan</h2>
+    <img id="scan"/>
+    <p id="text"></p>
+    <h3>History</h3>
+    <ul id="history">
+    </ul>
+  </div>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js"></script>
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<script type="text/javascript" charset="utf-8">
+
+  var socket = io.connect('http://' + document.domain + ':' + location.port);
+  socket.on('prev', function(msg) {
+    $("#preview").attr('src', 'data:image/jpeg;base64,' + msg.img);
+  });
+  
+  socket.on('scan', function(msg) {
+    $("#scan").attr('src', 'data:image/jpeg;base64,' + msg.img);
+    $("#history").append($('<li>').text(msg.text));
+  });
+</script>
+</body>
+</html>
+

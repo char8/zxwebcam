@@ -40,13 +40,15 @@ void poster_thread(std::string url_string,
     frame.save_jpeg_buffer(jpeg_out, jpeg_size, 60);
     
     msgpack::sbuffer sbuf;
+    // put in the JPEG
+    msgpack::pack(sbuf, msgpack::type::raw_ref(reinterpret_cast<char*>(jpeg_out),
+                  jpeg_size));
+    
+    // barcode text, format, and result_points_ array
     msgpack::pack(sbuf, r.text_);
     msgpack::pack(sbuf, r.format_);
     msgpack::pack(sbuf, r.result_points_);
-    msgpack::pack(sbuf, msgpack::type::raw_ref(reinterpret_cast<char*>(jpeg_out),
-                  jpeg_size));
-
-    logger->debug("jpeg {} bytes, msgpack {} bytes", jpeg_size, sbuf.size());
+     logger->debug("jpeg {} bytes, msgpack {} bytes", jpeg_size, sbuf.size());
 
     auto post = cpr::Post(cpr::Url(url_string),
           cpr::Body{sbuf.data(), sbuf.size()},
