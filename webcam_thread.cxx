@@ -1,4 +1,5 @@
 #include "webcam.h"
+#include "webcam_thread.h"
 #include "frame.h"
 #include "frame_queue.h"
 
@@ -13,12 +14,12 @@
 
 #include <spdlog/spdlog.h>
 
-void webcam_thread(std::string device, ThreadsafeQueue<FramePtr>& queue,
+void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
                    std::atomic_bool& exit_flag) {
 
   auto logger = spdlog::get("console");
   
-  zxwebcam::Webcam v(device);
+  zxwebcam::Webcam v(ws.device_, ws.res_y_, ws.res_x_, ws.fps_);
   
   try {
     v.init();

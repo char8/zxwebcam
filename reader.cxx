@@ -10,12 +10,12 @@
 
 using namespace ZXing;
 
-BarcodeReader::BarcodeReader(bool tryHarder, bool tryRotate) {
+BarcodeReader::BarcodeReader(std::vector<BarcodeFormat> fmts, 
+                             bool tryHarder, bool tryRotate) {
   DecodeHints hints;
   hints.setShouldTryHarder(tryHarder);
   hints.setShouldTryRotate(tryRotate);
-  hints.setPossibleFormats({BarcodeFormat::EAN_8, BarcodeFormat::EAN_13,
-                                BarcodeFormat::QR_CODE});
+  hints.setPossibleFormats(fmts);
 
   reader_ = std::make_shared<MultiFormatReader>(hints);
 }

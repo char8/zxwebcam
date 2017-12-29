@@ -8,3 +8,6 @@ set(USE_SYSTEM_CURL ON CACHE BOOL "use system curl libraries")
 #set(CMAKE_USE_OPENSSL OFF CACHE BOOL "don't use OpenSSL code")
 add_subdirectory(cpr)
 
+add_subdirectory(args EXCLUDE_FROM_ALL)
+
+

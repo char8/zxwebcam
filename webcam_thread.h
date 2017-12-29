@@ -7,7 +7,14 @@
 #include <string>
 #include <atomic>
 
-void webcam_thread(std::string device, ThreadsafeQueue<FramePtr>& queue,
+struct WebcamSetup {
+  std::string device_;
+  unsigned int res_x_;
+  unsigned int res_y_;
+  unsigned int fps_;
+};
+
+void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
                    std::atomic_bool& exit_flag);
  
 

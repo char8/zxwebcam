@@ -23,7 +23,8 @@ SET (LIBS ${LIBS}
           ${LibV4l2_LIBRARIES}
           ${CIMG_EXT_LIBRARIES}
           ${CMAKE_THREAD_LIBS_INIT}
-          spdlog)
+          spdlog
+          args)
 
 # detect X11
 find_package(X11)

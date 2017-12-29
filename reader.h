@@ -1,10 +1,13 @@
 #ifndef READER_H_
 #define READER_H_
 
+#include "frame.h"
+
+#include "BarcodeFormat.h"
+
 #include <string>
 #include <memory>
-
-#include "frame.h"
+#include <vector>
 
 namespace ZXing {
   class MultiFormatReader;
@@ -17,7 +20,8 @@ struct ScanResult {
 
 class BarcodeReader {
   public:
-    explicit BarcodeReader(bool try_harder = true, bool try_rotate = true); 
+    explicit BarcodeReader(std::vector<ZXing::BarcodeFormat> fmts,
+          bool try_harder = true, bool try_rotate = true); 
 
     ScanResult scan(FramePtr frame);
   private:

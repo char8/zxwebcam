@@ -7,3 +7,6 @@
 [submodule "3rdparty/cpr"]
 	path = 3rdparty/cpr
 	url = https://github.com/whoshuu/cpr.git
+[submodule "3rdparty/args"]
+	path = 3rdparty/args
+	url = https://github.com/Taywee/args.git
