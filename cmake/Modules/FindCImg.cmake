@@ -13,7 +13,7 @@ if (CIMG_INCLUDE_DIR)
 else (CIMG_INCLUDE_DIR)
   find_path(CIMG_INCLUDE_DIR
           NAMES CImg.h
-          PATHS "/usr/include")
+          PATHS ${CMAKE_SOURCE_DIR}/3rdparty/CImg /usr/include)
 endif(CIMG_INCLUDE_DIR)
 
 list(APPEND CIMG_INCLUDE_DIRS

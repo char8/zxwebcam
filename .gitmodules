@@ -10,3 +10,6 @@
 [submodule "3rdparty/args"]
 	path = 3rdparty/args
 	url = https://github.com/Taywee/args.git
+[submodule "3rdparty/CImg"]
+	path = 3rdparty/CImg
+	url = https://github.com/dtschump/CImg.git
