@@ -42,10 +42,14 @@ ScanResult BarcodeReader::scan(FramePtr f) {
   if (result.isValid()) {
     std::string text;
     TextUtfEncoding::ToUtf8(result.text(), text);
+    std::vector<std::pair<int,int>> v;
+    for (auto& rp : result.resultPoints()) {
+      v.push_back({static_cast<int>(rp.x()), static_cast<int>(rp.y())});
+    }
     return ScanResult{f,
                       ToString(result.format()),
                       text,
-                      result.resultPoints()};
+                      v};
   }
 
   auto sr = ScanResult();

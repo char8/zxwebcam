@@ -24,6 +24,7 @@ add_subdirectory(3rdparty)
 
 SET (SRCS decode_thread.cxx
           webcam.cxx
+          poster_thread.cxx
           webcam_thread.cxx
           reader.cxx)
 
@@ -49,6 +50,9 @@ else (X11_FOUND)
   message(STATUS "compiling without X11 support")
   add_definitions(-Dcimg_display=0)
 endif (X11_FOUND)
+
+#include for msgpack-c
+include_directories(${CMAKE_SOURCE_DIR}/3rdparty/msgpack-c/include)
 
 # set CFLAGS
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -ggdb")

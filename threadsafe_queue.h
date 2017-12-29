@@ -22,7 +22,7 @@ class ThreadsafeQueue {
       cond_.notify_one();
     };
 
-    FramePtr wait_and_pop() {
+    T wait_and_pop() {
       std::unique_lock<std::mutex> lock(mutex_);
       while(data_.empty()) {
         cond_.wait(lock);
@@ -33,12 +33,12 @@ class ThreadsafeQueue {
       return p;
     };
 
-    FramePtr pop_with_timeout(int timeout) {
+    T pop_with_timeout(int timeout) {
       std::unique_lock<std::mutex> lock(mutex_);
       while(data_.empty()) {
         auto r = cond_.wait_for(lock, std::chrono::seconds(timeout));
         if (r == std::cv_status::timeout) {
-          return nullptr;
+          return T();
         }
       }
 

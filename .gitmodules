@@ -13,3 +13,6 @@
 [submodule "3rdparty/CImg"]
 	path = 3rdparty/CImg
 	url = https://github.com/dtschump/CImg.git
+[submodule "3rdparty/msgpack-c"]
+	path = 3rdparty/msgpack-c
+	url = https://github.com/msgpack/msgpack-c.git

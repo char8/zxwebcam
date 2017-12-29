@@ -1,21 +1,19 @@
 #include "reader.h"
 #include "decode_thread.h"
-#include "frame.h"
-#include "threadsafe_queue.h"
 
 #include <spdlog/spdlog.h>
-#include <jpeglib.h>
-#include <jerror.h>
-#define cimg_plugin "plugins/jpeg_buffer.h"
 #include <CImg.h>
 
+#include <chrono>
 #include <atomic>
 #include <vector>
 #include <cstdio>
 
 using namespace cimg_library;
 
-void decode_thread(DecoderSetup ds, ThreadsafeQueue<FramePtr>& queue,
+void decode_thread(DecoderSetup ds,
+                   ThreadsafeQueue<FramePtr>& frame_queue,
+                   ThreadsafeQueue<ScanResult>& result_queue,
                    std::atomic_bool& exit_flag) {
   
   auto logger = spdlog::get("console");
@@ -43,13 +41,44 @@ void decode_thread(DecoderSetup ds, ThreadsafeQueue<FramePtr>& queue,
   }
 
   BarcodeReader br(fmts);
-
+  
+  auto last_post_time = std::chrono::steady_clock::now();
+  auto last_scan_time = std::chrono::steady_clock::now();
+  std::string last_scan;
   
   while(true) {
-    FramePtr p = queue.pop_with_timeout(1);
+    FramePtr p = frame_queue.pop_with_timeout(1);
     
     if (exit_flag) { break; } // exit flag
     if (p == nullptr) { continue; } // timeout
+
+    auto res = br.scan(p);
+    
+    auto now_time = std::chrono::steady_clock::now();
+
+    // post results provided backoff conditions met
+    if (!res.text_.empty()) {
+      // only post the result if we're backoff_seconds_ from the same result
+      // last being scanned
+      bool b = ((now_time - last_scan_time) <= std::chrono::seconds{BACKOFF_SECS});
+      if ((res.text_ != last_scan) || (!b)) {
+        result_queue.push(res);
+      } else {
+        logger->debug("Dropping result due to backoff");
+      }
+
+      last_scan = res.text_;
+      last_scan_time = now_time;
+      last_post_time = now_time;
+    }
+
+    // periodically post images, preview
+    if (now_time - last_post_time > std::chrono::seconds{1}) {
+      last_post_time = now_time;
+      if (result_queue.size() < 5) {
+        result_queue.push(res);
+      }
+    }
 
 #ifdef XDISPLAY
     if (ds.enable_preview_) {
@@ -57,15 +86,8 @@ void decode_thread(DecoderSetup ds, ThreadsafeQueue<FramePtr>& queue,
       // CImg needs a different byte order
       img.permute_axes("YZCX");
       img.display(main_disp);
-      logger->debug("preview");
     }
 #endif
 
-    auto res = br.scan(p);
-    
-    if (!res.text_.empty()) {
-      logger->info(res.text_);
-      logger->info(res.format_);
-    }
   }
 }
