@@ -1,20 +1,17 @@
 #include "reader.h"
 #include "decode_thread.h"
-
 #include "frame.h"
 #include "frame_queue.h"
 
 #include <spdlog/spdlog.h>
+#include <jpeglib.h>
+#include <jerror.h>
+#define cimg_plugin "plugins/jpeg_buffer.h"
+#include <CImg.h>
 
 #include <atomic>
 #include <vector>
-
 #include <cstdio>
-#include <jpeglib.h>
-#include <jerror.h>
-
-#define cimg_plugin "plugins/jpeg_buffer.h"
-#include <CImg.h>
 
 using namespace cimg_library;
 
@@ -49,11 +46,10 @@ void decode_thread(DecoderSetup ds, ThreadsafeQueue<FramePtr>& queue,
 
   
   while(true) {
-    FramePtr p = queue.wait_and_pop();
+    FramePtr p = queue.pop_with_timeout(1);
     
-    // break loop if queue poisoned or exit_flag set
-    if ((p == nullptr) || (exit_flag))
-      break;
+    if (exit_flag) { break; } // exit flag
+    if (p == nullptr) { continue; } // timeout
 
 #ifdef XDISPLAY
     if (ds.enable_preview_) {

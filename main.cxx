@@ -29,8 +29,8 @@ int main(int argc, char** argv) {
   
   args::Positional<std::string> device(parser, "device", "V4L capture device",
                                        "/dev/video0");
-  args::ValueFlag<int> res_x(parser, "cap_width", "webcam x pixels", {'w'});
-  args::ValueFlag<int> res_y(parser, "cap_height", "webcam y pixels", {'h'});
+  args::ValueFlag<int> res_x(parser, "cap_width", "webcam x pixels", {'x'});
+  args::ValueFlag<int> res_y(parser, "cap_height", "webcam y pixels", {'y'});
   args::ValueFlag<int> fps(parser, "fps", "webcam capture framerate", {'r'});
 
   args::Flag verbose(parser, "verbose", "verbose log output", {'v'});

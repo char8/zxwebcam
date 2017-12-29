@@ -32,6 +32,20 @@ class ThreadsafeQueue {
       return p;
     };
 
+    FramePtr pop_with_timeout(int timeout) {
+      std::unique_lock<std::mutex> lock(mutex_);
+      while(data_.empty()) {
+        auto r = cond_.wait_for(lock, std::chrono::seconds(timeout));
+        if (r == std::cv_status::timeout) {
+          return nullptr;
+        }
+      }
+
+      T p = data_.front();
+      data_.pop();
+      return p;
+    };
+
     int size() const {
       std::lock_guard<std::mutex> lock(mutex_);
       return data_.size();

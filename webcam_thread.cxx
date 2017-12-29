@@ -21,25 +21,23 @@ void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
   
   zxwebcam::Webcam v(ws.device_, ws.res_y_, ws.res_x_, ws.fps_);
   
+  logger->info("Initialising webcam {} with res {}x{} @ {} fps",
+               ws.device_, ws.res_x_, ws.res_y_, ws.fps_);
   try {
     v.init();
-  } catch (const std::system_error& e) {
-    logger->error("Could not initialise webcam device: <{}> {}",
-                  e.what(),
-                  e.code().message());
-    return;
   } catch (const std::runtime_error& e) {
-    logger->error("Could not initialise webcam device: {}",
+    logger->error("Could not initialise webcam device: <{}>",
                   e.what());
+    exit_flag = true;
     return;
   }
 
   try {
     v.start_capture();
-  } catch (const std::system_error& e) {
-    logger->error("Could not start capture: <{}> {}",
-                  e.what(),
-                  e.code().message());
+  } catch (const std::runtime_error& e) {
+    logger->error("Could not start capture: <{}>",
+                  e.what());
+    exit_flag = true;
     return;
   }
 
@@ -70,7 +68,7 @@ void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
     //logger->debug("Frame captured");
 
     //TODO: put the hardcoded magic num somewhere sensible
-    if (queue.size() > 10) {
+    if (queue.size() > (int)(ws.fps_)) {
       logger->warn("Frame queue full, discarding frame.");
     } else {
       queue.push(f);
@@ -80,12 +78,9 @@ void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
   try {
     v.end_capture();
     v.close();
-  } catch (const std::system_error& e) {
-    logger->error("Could not shutdown webcam device: <{}> {}",
-                  e.what(),
-                  e.code().message());
   } catch (const std::runtime_error& e) {
     logger->error("Could not shutdown webcam device: {}",
                   e.what());
+    exit_flag = true;
   }
 }
