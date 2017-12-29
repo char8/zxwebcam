@@ -2,7 +2,7 @@
 #define WEBCAM_THREAD_H_
 
 #include "frame.h"
-#include "frame_queue.h"
+#include "threadsafe_queue.h"
 
 #include <string>
 #include <atomic>

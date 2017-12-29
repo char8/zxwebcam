@@ -42,8 +42,13 @@ ScanResult BarcodeReader::scan(FramePtr f) {
   if (result.isValid()) {
     std::string text;
     TextUtfEncoding::ToUtf8(result.text(), text);
-    return ScanResult{ToString(result.format()), text};
+    return ScanResult{f,
+                      ToString(result.format()),
+                      text,
+                      result.resultPoints()};
   }
 
-  return ScanResult();
+  auto sr = ScanResult();
+  sr.frame_ = f;
+  return sr;
 }

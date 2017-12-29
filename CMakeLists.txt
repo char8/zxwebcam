@@ -3,6 +3,15 @@ PROJECT(zxwebcam-cpp)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)                 
+if(NOT CMAKE_BUILD_TYPE)                            
+  set(CMAKE_BUILD_TYPE Release)                                                                          
+endif()                   
+                                                      
+set(CMAKE_CXX_FLAGS_DEBUG "-g")                     
+set(CMAKE_CXX_FLAGS_RELEASE "-O3") 
+
 FIND_PACKAGE(LibV4l2 REQUIRED)
 include_directories(${LibV4l2_INCLUDE_DIRS})
 
@@ -24,6 +33,7 @@ SET (LIBS ${LIBS}
           ${CIMG_EXT_LIBRARIES}
           ${CMAKE_THREAD_LIBS_INIT}
           spdlog
+          cpr
           args)
 
 # detect X11

@@ -1,7 +1,9 @@
 #ifndef DECODE_THREAD_H_
 #define DECODE_THREAD_H_
 #include "frame.h"
-#include "frame_queue.h"
+#include "threadsafe_queue.h"
+
+#include "ResultPoint.h"
 
 #include <atomic>
 #include <string>
