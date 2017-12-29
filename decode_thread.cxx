@@ -1,7 +1,7 @@
 #include "reader.h"
 #include "decode_thread.h"
 #include "frame.h"
-#include "frame_queue.h"
+#include "threadsafe_queue.h"
 
 #include <spdlog/spdlog.h>
 #include <jpeglib.h>
@@ -57,6 +57,7 @@ void decode_thread(DecoderSetup ds, ThreadsafeQueue<FramePtr>& queue,
       // CImg needs a different byte order
       img.permute_axes("YZCX");
       img.display(main_disp);
+      logger->debug("preview");
     }
 #endif
 

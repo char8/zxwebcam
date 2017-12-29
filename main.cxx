@@ -1,7 +1,7 @@
 #include "webcam.h"
 #include "webcam_thread.h"
 #include "decode_thread.h"
-#include "frame_queue.h"
+#include "threadsafe_queue.h"
 #include "frame.h"
 
 #include <spdlog/spdlog.h>

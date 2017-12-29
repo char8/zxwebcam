@@ -125,6 +125,9 @@ void Webcam::init() {
     throw std::system_error(errno, std::generic_category(),
         "Unable to set framerate.");
 
+  logger_->debug("FPS {}/{}", sparm.parm.capture.timeperframe.denominator,
+                 sparm.parm.capture.timeperframe.numerator);
+
   init_mmap();
 
   logger_->debug("Initialised {}", device_);

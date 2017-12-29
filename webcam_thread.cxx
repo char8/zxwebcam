@@ -1,8 +1,9 @@
 #include "webcam.h"
 #include "webcam_thread.h"
 #include "frame.h"
-#include "frame_queue.h"
+#include "threadsafe_queue.h"
 
+#include <chrono>
 #include <string>
 #include <atomic>
 #include <system_error>
@@ -19,7 +20,16 @@ void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
 
   auto logger = spdlog::get("console");
   
-  zxwebcam::Webcam v(ws.device_, ws.res_y_, ws.res_x_, ws.fps_);
+  // FPS measurement and some metrics
+  int frame_count = 0;
+  int dropped_frames = 0;
+  const int fps_div_sb = 3; // divide by shifting 3 bit pos (/8)
+  auto fps_log_seconds = std::chrono::seconds{1 << fps_div_sb};
+  std::chrono::time_point<std::chrono::steady_clock>  start_time = \
+                std::chrono::steady_clock::now(), now_time;
+
+
+  zxwebcam::Webcam v(ws.device_, ws.res_y_, ws.res_x_, ws.fps_, ws.fps_);
   
   logger->info("Initialising webcam {} with res {}x{} @ {} fps",
                ws.device_, ws.res_x_, ws.res_y_, ws.fps_);
@@ -65,13 +75,27 @@ void webcam_thread(WebcamSetup ws, ThreadsafeQueue<FramePtr>& queue,
     if (f == nullptr)
       continue;
     
-    //logger->debug("Frame captured");
 
     //TODO: put the hardcoded magic num somewhere sensible
     if (queue.size() > (int)(ws.fps_)) {
       logger->warn("Frame queue full, discarding frame.");
+      dropped_frames++;
     } else {
       queue.push(f);
+      frame_count++;
+    }
+
+    now_time = std::chrono::steady_clock::now();
+
+    if (now_time - start_time >= fps_log_seconds) {
+      // log fps
+      logger->info("frames {}, dropped {} frames, avg fps {}",
+          frame_count,
+          dropped_frames,
+          (frame_count >> fps_div_sb));
+
+      frame_count = 0;
+      start_time = now_time;
     }
   }
   
