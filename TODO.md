@@ -2,11 +2,6 @@
 
 (Not prioritised)
 
-* Create CMake build config
-* Add abstractions for captured frame and barcode extraction
-* Throw exceptions instead of exit(EXIT_FAILURE) calls
-* Check clean-up on destructor
-* Decide on threading vs wrapping select()/libevent/libuv/etc...
-* Clean up interface
-* consistent naming of C++/C files
-* abstract away ZXing
+* investigate issue where turning streaming off on Raspi fails (errno 22)
+* report when fps setting overriden by driver
+
